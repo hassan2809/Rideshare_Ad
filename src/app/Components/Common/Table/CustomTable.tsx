@@ -1,0 +1,341 @@
+"use client";
+
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import {
+  Box,
+  Table,
+  TableBody,
+  TableCell,
+  TableContainer,
+  TableHead,
+  TableRow,
+  Tooltip,
+  Typography,
+} from "@mui/material";
+import CustomTablePagination from "./CustomTablePagination";
+import { useRouter } from "next/navigation";
+import colors from "../../../Utils/colors";
+import { selectUser } from "../../../Redux/Slices/userSlice";
+import { allRoutes } from "../../../Routes/AllRoutes";
+import ArrowUpwardOutlinedIcon from "@mui/icons-material/ArrowUpwardOutlined";
+import ArrowDownwardOutlinedIcon from "@mui/icons-material/ArrowDownwardOutlined";
+import { formatNumber } from "../../../Utils/utils";
+import { useSelector } from "../../../Redux/reduxHooks";
+import { useTranslation } from "react-i18next";
+
+export interface TableHeaderProps {
+  text: string;
+  key: string;
+  alternateKey?: string;
+  showEllipses?: boolean;
+  maxWidth?: number;
+  align?: any;
+  customComponent?: (props: any) => any;
+  notClickable?: boolean;
+  sortable?: boolean;
+  sequentialId?: string;
+}
+
+interface CustomTableProps {
+  headers?: Array<TableHeaderProps>;
+  rows?: Array<any>;
+  hidePagination?: boolean;
+  disableRowClick?: boolean;
+  extraPaddingInParent?: number;
+  detailsPagePath?: string;
+  rowsPerPage?: number;
+  maxHeight?: number | string;
+  onRowClick?: (row: any) => void;
+  stickyHeaders?: boolean;
+  highlightedId?: string;
+}
+
+interface SortConfig {
+  key: string | null;
+  direction: 1 | -1;
+}
+
+export const tableHeaders = [
+  { text: "ID", key: "sequentialId", showEllipses: true, maxWidth: 75 },
+  { text: "Name", key: "name" },
+  { text: "Email address", key: "email" },
+];
+
+const CustomTable = ({
+  headers,
+  rows,
+  hidePagination,
+  extraPaddingInParent,
+  detailsPagePath = "",
+  rowsPerPage = 10,
+  maxHeight,
+  stickyHeaders,
+  highlightedId,
+  onRowClick,
+}: CustomTableProps) => {
+  const { t } = useTranslation();
+  const user = useSelector(selectUser);
+  const router = useRouter();
+  const rowRefs = useRef<{ [key: string]: HTMLTableRowElement | null }>({});
+
+  const totalPages = Math.ceil((rows?.length ?? 1) / rowsPerPage);
+
+  const [page, setPage] = useState(1);
+
+  const [sortConfig, setSortConfig] = useState<SortConfig>({
+    key: null,
+    direction: 1,
+  });
+
+  const requestSort = (key: string) => {
+    let direction: 1 | -1 = 1;
+    let keyToBeSet: string | null = key;
+    if (sortConfig.key === key && sortConfig.direction === 1) {
+      direction = -1;
+    }
+    if (sortConfig.key === key && sortConfig.direction === -1) {
+      keyToBeSet = null;
+      direction = 1;
+    }
+    setSortConfig({ key: keyToBeSet, direction });
+  };
+
+  const sortedRows = useMemo(() => {
+    if (!sortConfig.key || !rows) return rows;
+
+    const rowsCopy = [...rows];
+
+    return rowsCopy.sort((a, b) => {
+      const key = sortConfig.key!;
+      let x = a[key];
+      let y = b[key];
+
+      // Determine if the values are numbers or strings
+      const isNumeric = !isNaN(Number(x)) && !isNaN(Number(y));
+
+      if (isNumeric) {
+        // For numbers, compare numerically
+        return sortConfig.direction * (Number(x) - Number(y));
+      } else {
+        // For strings, compare case-insensitively
+        x = String(x).toUpperCase();
+        y = String(y).toUpperCase();
+        return x === y ? 0 : (x > y ? 1 : -1) * sortConfig.direction;
+      }
+    });
+  }, [rows, sortConfig]);
+
+  const handleRowClick = (id: string, row: any) => {
+    if (detailsPagePath)
+      router.push(
+        id === user._id
+          ? allRoutes.ACCOUNT_SETTINGS
+          : detailsPagePath?.replace(":id", id)
+      );
+    if (onRowClick) onRowClick(row);
+  };
+
+  useEffect(() => {
+    if (highlightedId && rowRefs.current[highlightedId]) {
+      rowRefs.current[highlightedId]?.scrollIntoView({
+        behavior: "smooth",
+        block: "center",
+      });
+    }
+  }, [highlightedId, sortedRows]);
+
+  return (
+    <>
+      <TableContainer
+        sx={{
+          mt: 32,
+          maxWidth: `calc(100vw - 32px - 32px${
+            extraPaddingInParent ? ` - ${extraPaddingInParent * 2}px` : ""
+          })`,
+          maxHeight,
+        }}
+      >
+        <Table>
+          <TableHead
+            sx={
+              stickyHeaders
+                ? {
+                    position: "sticky",
+                    top: 0,
+                    backgroundColor: "background.default",
+                    zIndex: 1,
+                  }
+                : {}
+            }
+          >
+            <TableRow>
+              {headers?.map((header: TableHeaderProps, idx: number) => (
+                <TableCell
+                  key={idx}
+                  align={header.align || "left"}
+                  onClick={() => header.sortable && requestSort(header.key)}
+                >
+                  <Box
+                    display={"flex"}
+                    alignItems='center'
+                    justifyContent={
+                      header.align === "right"
+                        ? "end"
+                        : header.align === "center"
+                        ? "center"
+                        : "start"
+                    }
+                    style={{ cursor: header.sortable ? "pointer" : "default" }}
+                  >
+                    {t(header.text)}
+
+                    {header.sortable &&
+                      (sortConfig.key === header.key ? (
+                        sortConfig.direction === 1 ? (
+                          <ArrowUpwardOutlinedIcon
+                            sx={{
+                              fontSize: "12px",
+                              color: colors.text,
+                              ml: "5px",
+                            }}
+                          />
+                        ) : (
+                          <ArrowDownwardOutlinedIcon
+                            sx={{
+                              fontSize: "12px",
+                              color: colors.text,
+                              ml: "5px",
+                            }}
+                          />
+                        )
+                      ) : null)}
+                  </Box>
+                </TableCell>
+              ))}
+            </TableRow>
+          </TableHead>
+
+          <TableBody
+            sx={{
+              "& tr": {
+                "&:nth-last-of-type(1)": {
+                  "& td": {
+                    borderBottom: 0,
+                  },
+                },
+
+                "&:hover":
+                  detailsPagePath || onRowClick
+                    ? {}
+                    : {
+                        cursor: "auto",
+                        boxShadow: "none !important",
+                      },
+              },
+            }}
+          >
+            {sortedRows?.map((row, idx) => {
+              if (idx >= (page - 1) * rowsPerPage && idx < page * rowsPerPage) {
+                return (
+                  <TableRow
+                    key={idx}
+                    ref={(el) => {
+                      if (row?._id) rowRefs.current[row._id] = el;
+                    }}
+                    sx={{
+                      backgroundColor:
+                        row._id === highlightedId
+                          ? colors.primary + "10"
+                          : "inherit",
+                    }}
+                  >
+                    {headers?.map((header: TableHeaderProps, idx: number) => (
+                      <TableCell
+                        align={header.align || "left"}
+                        key={idx}
+                        onClick={
+                          header.notClickable
+                            ? undefined
+                            : () => handleRowClick(row._id, row)
+                        }
+                      >
+                        {header.customComponent ? (
+                          header.customComponent(row)
+                        ) : header?.showEllipses ? (
+                          <Box style={{ maxWidth: header?.maxWidth ?? 150 }}>
+                            <Tooltip
+                              title={row?.[header.key] ?? "-"}
+                              placement='top-start'
+                              arrow
+                            >
+                              <Typography
+                                fontSize='inherit'
+                                fontWeight='inherit'
+                                sx={{
+                                  overflow: "hidden",
+                                  whiteSpace: "nowrap",
+                                  textOverflow: "ellipsis",
+                                }}
+                              >
+                                {(![undefined, null, ""]?.includes(
+                                  row?.[header.key]
+                                )
+                                  ? typeof row?.[header.key] === "number"
+                                    ? formatNumber(row?.[header.key])
+                                    : row?.[header.key]
+                                  : header.alternateKey &&
+                                    row?.[header.alternateKey]
+                                  ? typeof row?.[header.alternateKey] ===
+                                    "number"
+                                    ? formatNumber(row?.[header.alternateKey])
+                                    : row?.[header.alternateKey]
+                                  : "") || "-"}
+                              </Typography>
+                            </Tooltip>
+                          </Box>
+                        ) : (
+                          (![undefined, null, ""]?.includes(row?.[header.key])
+                            ? typeof row?.[header.key] === "number"
+                              ? formatNumber(row?.[header.key])
+                              : row?.[header.key]
+                            : header.alternateKey && row?.[header.alternateKey]
+                            ? typeof row?.[header.alternateKey] === "number"
+                              ? formatNumber(row?.[header.alternateKey])
+                              : row?.[header.alternateKey]
+                            : "") || "-"
+                        )}
+                        {row._id === user._id && header.key === "name" ? (
+                          <Typography
+                            component='span'
+                            fontSize='12px'
+                            color='text.secondary'
+                          >
+                            {" "}
+                            (Me)
+                          </Typography>
+                        ) : (
+                          ""
+                        )}
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                );
+              }
+              return <React.Fragment key={idx} />;
+            })}
+          </TableBody>
+        </Table>
+      </TableContainer>
+
+      {!hidePagination && totalPages > 1 && (
+        <CustomTablePagination
+          page={page}
+          totalPages={totalPages}
+          onChange={(newPage) => setPage(newPage)}
+        />
+      )}
+    </>
+  );
+};
+
+export default CustomTable;
